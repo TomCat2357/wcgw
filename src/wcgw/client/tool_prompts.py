@@ -25,7 +25,11 @@ TOOL_PROMPTS = [
 - If the user has mentioned a workspace or project root or any other file or folder use it to set `any_workspace_path`.
 - If user has mentioned any files use `initial_files_to_read` to read, use absolute paths only (~ allowed)
 - By default use mode "wcgw"
-- In "code-writer" mode, set the commands and globs which user asked to set, otherwise use 'all'.
+- In "code-writer" mode:
+  - Set the allowed globs as requested by the user
+  - For command control, you can use `allowed_commands` (list of allowed commands or None for all allowed)
+  - You can also use `denied_commands` (list of denied commands or None for no denied commands)
+  - Example: `code_writer_config={"allowed_globs": "all", "allowed_commands": ["git", "pytest"], "denied_commands": ["rm"]}`
 - Use type="first_call" if it's the first call to this tool.
 - Use type="user_asked_mode_change" if in a conversation user has asked to change mode.
 - Use type="reset_shell" if in a conversation shell is not working after multiple tries.

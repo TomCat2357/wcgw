@@ -162,7 +162,10 @@ There are three built-in modes. You may ask Claude to run in one of the modes, l
 | **Code-writer** | For code writing and development | Specified path globs for editing or writing, specified commands | FileEdit for paths not matching specified glob, Write for paths not matching specified glob | Run in code writer mode, only 'tests/**' allowed, only uv command allowed |
 | **wcgw\*\* | Default mode with everything allowed | Everything | Nothing | No prompt, or "Run in wcgw mode" |
 
-Note: in code-writer mode either all commands are allowed or none are allowed for now. If you give a list of allowed commands, Claude is instructed to run only those commands, but no actual check happens. (WIP)
+You can control command execution in code-writer mode using allow/deny lists:
+- Use `allowed_commands` to specify what commands are allowed (None means all commands are allowed)
+- Use `denied_commands` to specify what commands are not allowed (None means no commands are denied)
+- Example: `Run in code writer mode, allowed_commands=['uv', 'pytest'], denied_commands=['rm'], only 'tests/**' allowed`
 
 #### Attach to the working terminal to investigate
 

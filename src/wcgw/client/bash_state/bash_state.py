@@ -1035,9 +1035,26 @@ def _execute_bash(
 
         if isinstance(command_data, Command):
             if bash_state.bash_command_mode.allowed_commands == "none":
-                return "Error: BashCommand not allowed in current mode", 0.0
+                # This old check path should ideally not be hit if new logic is correct
+                # but keeping as a fallback defensive measure for now.
+                # The new logic below should handle this.
+                 pass # Fall through to new permission check
 
             bash_state.console.print(f"$ {command_data.command}")
+
+            # New command permission check
+            actual_command_str = command_data.command.strip().split(" ")[0]
+            allowed_cmds = bash_state.bash_command_mode.allowed_commands
+            denied_cmds = bash_state.bash_command_mode.denied_commands
+
+            is_explicitly_denied = False
+            if denied_cmds is not None and actual_command_str in denied_cmds:
+                is_explicitly_denied = True
+
+            is_allowed = (allowed_cmds is None or actual_command_str in allowed_cmds) and not is_explicitly_denied
+
+            if not is_allowed:
+                return f"Error: Command '{actual_command_str}' is not allowed in the current mode. Allowed: {allowed_cmds if allowed_cmds is not None else 'all (unless denied)'}, Denied: {denied_cmds if denied_cmds is not None else 'none'}.", 0.0
 
             if bash_state.state == "pending":
                 raise ValueError(WAITING_INPUT_MESSAGE)

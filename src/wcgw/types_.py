@@ -18,17 +18,17 @@ Modes = Literal["wcgw", "architect", "code_writer"]
 
 class CodeWriterMode(BaseModel):
     allowed_globs: Literal["all"] | list[str]
-    allowed_commands: Literal["all"] | list[str]
+    # allowed_commands: Optional[list[str]] = None  -> None means all commands are allowed (subject to denied_commands)
+    allowed_commands: Optional[list[str]] = None
+    # denied_commands: Optional[list[str]] = None  -> None means no commands are denied
+    denied_commands: Optional[list[str]] = None
 
     def model_post_init(self, _: Any) -> None:
         # Patch frequently wrong output trading off accuracy
         # in rare case there's a file named 'all' or a command named 'all'
-        if len(self.allowed_commands) == 1:
-            if self.allowed_commands[0] == "all":
-                self.allowed_commands = "all"
-        if len(self.allowed_globs) == 1:
+        if isinstance(self.allowed_globs, list) and len(self.allowed_globs) == 1:
             if self.allowed_globs[0] == "all":
-                self.allowed_globs = "all"
+                self.allowed_globs = "all" # type: ignore
 
     def update_relative_globs(self, workspace_root: str) -> None:
         """Update globs if they're relative paths"""

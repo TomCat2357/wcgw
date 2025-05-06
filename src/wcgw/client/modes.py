@@ -6,14 +6,21 @@ from ..types_ import Modes, ModesConfig
 
 class BashCommandMode(NamedTuple):
     bash_mode: Literal["normal_mode", "restricted_mode"]
-    allowed_commands: Literal["all", "none"]
+    allowed_commands: Optional[list[str]]  # None means all allowed (subject to denied)
+    denied_commands: Optional[list[str]]   # None means none denied
 
     def serialize(self) -> dict[str, Any]:
-        return {"bash_mode": self.bash_mode, "allowed_commands": self.allowed_commands}
+        return {
+            "bash_mode": self.bash_mode,
+            "allowed_commands": self.allowed_commands,
+            "denied_commands": self.denied_commands,
+        }
 
     @classmethod
     def deserialize(cls, data: dict[str, Any]) -> "BashCommandMode":
-        return cls(data["bash_mode"], data["allowed_commands"])
+        return cls(
+            data["bash_mode"], data.get("allowed_commands"), data.get("denied_commands")
+        )
 
 
 class FileEditMode(NamedTuple):
@@ -48,7 +55,8 @@ class ModeImpl:
 def code_writer_prompt(
     allowed_file_edit_globs: Literal["all"] | list[str],
     all_write_new_globs: Literal["all"] | list[str],
-    allowed_commands: Literal["all"] | list[str],
+    allowed_commands: Optional[list[str]],
+    denied_commands: Optional[list[str]],
 ) -> str:
     base = """
 You are now running in "code_writer" mode.
@@ -92,20 +100,39 @@ You are now running in "code_writer" mode.
     - Do not use artifacts if you have access to the repository and not asked by the user to provide artifacts/snippets. Directly create/update using wcgw tools.
 """
 
-    command_prompt = f"""
+    # Generate command permission part of the prompt
+    if allowed_commands is None and denied_commands is None:
+        command_prompt = f"""
     - You are only allowed to run commands for project setup, code writing, editing, updating, testing, running and debugging related to the project.
     - Do not run anything that adds or removes packages, changes system configuration or environment.
 {run_command_common}
 """
-    if allowed_commands != "all":
-        if allowed_commands:
+    else:
+        allowed_prompt_part = ""
+        if allowed_commands is not None:
+            if allowed_commands: # Not an empty list
+                allowed_prompt_part = f"""
+    - You are only allowed to run the following commands: {", ".join(allowed_commands)}."""
+            else: # Empty list means no commands are explicitly allowed
+                allowed_prompt_part = """
+    - No commands are explicitly allowed by the allow-list."""
+        else: # allowed_commands is None, means all commands are allowed (subject to denylist)
+            allowed_prompt_part = """
+    - All commands are generally allowed, unless specified in the deny-list."""
+
+        denied_prompt_part = ""
+        if denied_commands: # denied_commands is a non-empty list
+            denied_prompt_part = f"""
+    - However, the following commands are explicitly denied: {", ".join(denied_commands)}."""
+
+        # Combine parts
+        if not allowed_commands and not denied_commands: # Both empty or None
             command_prompt = f"""
-    - You are only allowed to run the following commands: {", ".join(allowed_commands)}
-{run_command_common}
-"""
+    - Command execution is highly restricted based on the current configuration.
+{run_command_common}"""
         else:
-            command_prompt = """
-    - You are not allowed to run any commands.
+            command_prompt = f"""{allowed_prompt_part}{denied_prompt_part}
+{run_command_common}
 """
 
     base += command_prompt
@@ -153,17 +180,19 @@ Respond only after doing the following:
 
 DEFAULT_MODES: dict[Modes, ModeImpl] = {
     "wcgw": ModeImpl(
-        bash_command_mode=BashCommandMode("normal_mode", "all"),
+        bash_command_mode=BashCommandMode("normal_mode", allowed_commands=None, denied_commands=None),
         write_if_empty_mode=WriteIfEmptyMode("all"),
         file_edit_mode=FileEditMode("all"),
     ),
     "architect": ModeImpl(
-        bash_command_mode=BashCommandMode("restricted_mode", "all"),
+        # restricted_mode already limits shell capabilities significantly.
+        # Fine-grained control can be added here if needed via allowed/denied lists.
+        bash_command_mode=BashCommandMode("restricted_mode", allowed_commands=None, denied_commands=None),
         write_if_empty_mode=WriteIfEmptyMode([]),
         file_edit_mode=FileEditMode([]),
     ),
     "code_writer": ModeImpl(
-        bash_command_mode=BashCommandMode("normal_mode", "all"),
+        bash_command_mode=BashCommandMode("normal_mode", allowed_commands=None, denied_commands=None),
         write_if_empty_mode=WriteIfEmptyMode("all"),
         file_edit_mode=FileEditMode("all"),
     ),
@@ -179,12 +208,13 @@ def modes_to_state(
         mode_name: Modes = mode
     else:
         # For CodeWriterMode, use code_writer as base and override
-        mode_impl = DEFAULT_MODES["code_writer"]
+        base_mode_impl = DEFAULT_MODES["code_writer"]
         # Override with custom settings from CodeWriterMode
         mode_impl = ModeImpl(
             bash_command_mode=BashCommandMode(
-                mode_impl.bash_command_mode.bash_mode,
-                "all" if mode.allowed_commands else "none",
+                base_mode_impl.bash_command_mode.bash_mode,
+                allowed_commands=mode.allowed_commands,
+                denied_commands=mode.denied_commands,
             ),
             file_edit_mode=FileEditMode(mode.allowed_globs),
             write_if_empty_mode=WriteIfEmptyMode(mode.allowed_globs),

@@ -84,7 +84,8 @@ def get_mode_prompt(context: Context) -> str:
         mode_prompt = code_writer_prompt(
             context.bash_state.file_edit_mode.allowed_globs,
             context.bash_state.write_if_empty_mode.allowed_globs,
-            "all" if context.bash_state.bash_command_mode.allowed_commands else [],
+            context.bash_state.bash_command_mode.allowed_commands,
+            context.bash_state.bash_command_mode.denied_commands,
         )
     elif context.bash_state.mode == "architect":
         mode_prompt = ARCHITECT_PROMPT
